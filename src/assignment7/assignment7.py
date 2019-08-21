@@ -9,16 +9,14 @@ from nav_msgs.msg import Odometry
 
 class PID_Controller:
     def __init__(self):
-        self.last_time = rospy.Time.now()
-        self.yaw= 0. 
+        self.pre_time = rospy.Time.now()
+        self.yaw= 0
         self.setpoint= 0
-        self.acc_error= 0.
-        self.last_error= 0.
-        self.sub_odom = rospy.Subscriber("/communication/gps/15", Odometry, self.call_back)
-        self.str_pub = rospy.Publisher("/actuators/steering_normalized",NormalizedSteeringCommand
-, queue_size=1)
+        self.acc_error= 0
+        self.pre_error= 0
+        self.gps_sub = rospy.Subscriber("/communication/gps/15", Odometry, self.call_back)
+        self.str_pub = rospy.Publisher("/actuators/steering_normalized",NormalizedSteeringCommand, queue_size=1)
         self.speed_pub = rospy.Publisher("/actuators/speed",SpeedCommand,queue_size=1)
-
 
     def call_back (self,raw_msgs):
                 orientation= raw_msgs.pose.pose.orientation
@@ -29,24 +27,22 @@ class PID_Controller:
                 self.PID()
 
     def PID(self):	
-            #pid konfiguartion
-            Kp= 2
-            Ki= 0.5
-            Kd= -3
+            Kp= 5
+            Ki= 0
+            Kd= 0.1
             error= (self.setpoint - self.yaw) 
 
-            self.acc_error = self.acc_error + error
-          
+            self.acc_error = self.acc_error + error #accumulator for error
             current_time = rospy.Time.now()
-            dif_time = (current_time - self.last_time).to_sec()
-            #line of pid calculation kind of integral and diferential
-            PID= Kp * error + Ki * self.acc_error * dif_time + Kd * (error - self.last_error) / dif_time
-            PID = int(round(PID))
-             
-            self.last_time = current_time
-            self.last_error = error
+            delta_time = (current_time - self.pre_time).to_sec()
+            #Kp*error Ki*area Kd*slope
 
-    `       #pid value to steering message
+            PID= Kp * error + Ki * self.acc_error * delta_time + Kd * (error - self.pre_error) / delta_time
+            # PID = int(round(PID))
+            self.pre_time = current_time
+            self.pre_error = error
+
+            #pid value to steering message
             str_com=NormalizedSteeringCommand()
             str_com.value=PID
             self.str_pub.publish(str_com)
@@ -58,8 +54,8 @@ class PID_Controller:
            
 
 def main(args):
-        rospy.init_node("Local_GPS_data") # have to define node for ROS
-        control = PID_Controller() # call the class
+        rospy.init_node("PID_Control") 
+        control = PID_Controller() 
         try:
             rospy.spin()
         except:
